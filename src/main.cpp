@@ -28,6 +28,8 @@ void setup()
 {
   Serial.begin(9600);
 
+  Serial.println("Starting...");
+
   // Escs setup
   yellow_esc.writeMicroseconds(1000);
   pink_esc.attach(9);
@@ -42,13 +44,17 @@ void setup()
   while (status != 0)
   {
   }
-  // mpu.calcOffsets(true,true);
+  // mpu.calcOffsets(true,true); // Calculate offsets for gyro and acc
   mpu.setFilterGyroCoef(0.98);
 
   // Controler
   myPID.SetMode(AUTOMATIC);
-  myPID.SetOutputLimits(-100, 100);
+  myPID.SetOutputLimits(-90, 90);
 }
+
+float filteredAngle(float angle);
+float getReference();
+
 void loop()
 {
   // Measures new value of angle
@@ -56,7 +62,12 @@ void loop()
   angle = mpu.getAngleX();
 
   filtered_angle = filteredAngle(angle);
-  Serial.println(filtered_angle);
+  Serial.print("ref.: ");
+  Serial.print(ref);
+  Serial.print(" filtered angle: ");
+  Serial.print(filtered_angle);
+  Serial.print(" PID Output: ");
+  Serial.println(Output);
 
   // Controler
   Setpoint = getReference();
@@ -80,54 +91,11 @@ float filteredAngle(float angle)
   return (buff[0] + buff[1] + buff[2] + buff[3] + buff[4]) / 5;
 }
 
-float s2n(int des)
-{
-  char atual;
-  float number = 0;
-  int ponto = stin.indexOf('.', des);
-  int pot = -1;
-  ii = ponto + pot;
-  atual = stin.charAt(ii);
-  while (((int)atual < 58) && ((int)atual > 47))
-  {
-    number = number + ((int)atual - 48) * pow(10, -pot - 1);
-    pot--;
-    ii = ponto + pot;
-    atual = stin.charAt(ii);
-  }
-  pot = 1;
-  ii = ponto + pot;
-  atual = stin.charAt(ii);
-  while (((int)atual < 58) && ((int)atual > 47))
-  {
-    number = number + ((int)atual - 48) / pow(10, pot);
-    pot++;
-    ii = ponto + pot;
-    atual = stin.charAt(ii);
-  }
-  return number;
-}
-
 float getReference()
 {
-  if (Serial.available())
-  {
-    while (Serial.available())
-    {
-      char inChar = (char)Serial.read();
-      if (true)
-      {
-        stin = "";
-        while (Serial.available())
-        {
-          stin = stin + inChar;
-          inChar = (char)Serial.read();
-        }
-        ii = 0;
-        ref = s2n(ii);
-        ref = ref * 100;
-      }
+    if (Serial.available() > 0) {
+      ref = Serial.parseFloat();
     }
-  }
-  return ref;
+
+    return ref;
 }
