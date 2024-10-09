@@ -1,4 +1,4 @@
-#include <Wire.h>
+#include <Wire.h> // For I2C communication
 #include <MPU6050_light.h>
 #include <Servo.h>
 #include <PID_v1.h>
@@ -12,7 +12,7 @@ Servo pink_esc;
 
 // Controller variables
 double Setpoint, Input, Output;
-double Kp = .15, Ki = 1, Kd = 0.15;
+double Kp = .35, Ki = 0.15, Kd = 0.2;
 PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
 float angle = 0.0;
 
@@ -23,6 +23,7 @@ int ii = 0;
 
 // Filter variables
 float buff[5], filtered_angle = 0;
+void calibrateSensor();
 
 void setup()
 {
@@ -32,24 +33,26 @@ void setup()
 
   // Escs setup
   yellow_esc.writeMicroseconds(1000);
-  pink_esc.attach(9);
-  pink_esc.writeMicroseconds(1000);
   yellow_esc.attach(8);
+  
+  pink_esc.writeMicroseconds(1000);
+  pink_esc.attach(9);
   delay(2500);
 
   // MPU 6050 setup
   Wire.begin();
   mpu.begin();
-  byte status = mpu.begin(1, 0);
+  byte status = mpu.begin(0, 0); // sensibility of the gyro and acc
   while (status != 0)
   {
   }
-  // mpu.calcOffsets(true,true); // Calculate offsets for gyro and acc
+
+  calibrateSensor();
   mpu.setFilterGyroCoef(0.98);
 
   // Controler
   myPID.SetMode(AUTOMATIC);
-  myPID.SetOutputLimits(-90, 90);
+  myPID.SetOutputLimits(-100, 100);
 }
 
 float filteredAngle(float angle);
@@ -79,6 +82,14 @@ void loop()
   pink_esc.writeMicroseconds(int((1140 + Output) * 1.135));
 }
 
+void calibrateSensor()
+{
+  Serial.println("Calibrating...");
+  mpu.calcOffsets(true, true); // Calculate offsets for gyro and acc
+  delay(1000);
+  Serial.println("Calibration done");
+}
+
 float filteredAngle(float angle)
 {
   // This function returns the mean from the previous 5 values of angle measured
@@ -93,9 +104,10 @@ float filteredAngle(float angle)
 
 float getReference()
 {
-    if (Serial.available() > 0) {
-      ref = Serial.parseFloat();
-    }
+  if (Serial.available() > 0)
+  {
+    ref = Serial.parseFloat();
+  }
 
-    return ref;
+  return ref;
 }
