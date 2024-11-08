@@ -2,107 +2,107 @@
 #include <MPU6050_light.h>
 #include <Servo.h>
 #include <PID_v1.h>
+#include <ArduinoJson.h>
 
-#define MIN_PULSE_LENGTH 1000
-#define MAX_PULSE_LENGTH 2000
+#define MIN_PULSE_LENGTH 1000 // TODO: entender melhor esses valores
+#define MAX_PULSE_LENGTH 1400
 
 // MPU 6050 sensor
 MPU6050 mpu(Wire);
 
 // Escs
-Servo yellow_esc;
-Servo pink_esc;
+Servo yellowEsc;
+Servo pinkEsc;
 
-// Controller variables
-double Setpoint, Input, Output;
-double Kp = .5, Ki = 0.4, Kd = 0.3;
-PID myPID(&Input, &Output, &Setpoint, Kp, Ki, Kd, DIRECT);
-float angle = 0.0;
+// Filter
+float getFilteredAngle();
+float buff[5], filteredAngle = 0;
 
-// Input
-float ref = 0;
-String stin = "";
-int ii = 0;
-
-// Filter variables
-float buff[5], filtered_angle = 0;
+// Calibration
 void calibrateSensor();
 void calibrateEscs();
+
+// input
+float ref = 0, gyr = 0, disturbanceState = 0, automaticState = 0;
+int m1 = MIN_PULSE_LENGTH, m2 = MIN_PULSE_LENGTH;
+float measuredAngle;
+void getRemoteControlParameters();
+void setMotors();
+String incomingMessage;
+JsonDocument doc;
+
+// PID
+double kp = 1.5, ki = 0.05, kd = 0, P, I, D;
+float initialTime, deltaT, error, previousError, pidOutput;
+void calculatePid();
 
 void setup()
 {
   Serial.begin(9600);
-
   Serial.println("Starting...");
 
-  calibrateEscs();
+  Serial1.begin(115200);
+  Serial1.println("Starting...");
 
   // MPU 6050 setup
   Wire.begin();
   mpu.begin();
-  byte status = mpu.begin(0, 0); // sensibility of the gyro and acc
-  while (status != 0)
-  {
-  }
-
   calibrateSensor();
   mpu.setFilterGyroCoef(0.98);
 
-  // Controler
-  myPID.SetMode(AUTOMATIC);
-  myPID.SetOutputLimits(-100, 100);
+  // Escs setup
+  yellowEsc.attach(8);
+  pinkEsc.attach(9);
+  calibrateEscs();
 }
-
-float filteredAngle(float angle);
-float getReference();
 
 void loop()
 {
-  // Measures new value of angle
+  initialTime = millis();
+
+  // angle
   mpu.update();
-  angle = mpu.getAngleX();
+  measuredAngle = mpu.getAngleX();
+  filteredAngle = getFilteredAngle();
 
-  filtered_angle = filteredAngle(angle);
-  Serial.print("ref.: ");
-  Serial.print(ref);
-  Serial.print(" filtered angle: ");
-  Serial.print(filtered_angle);
-  Serial.print(" PID Output: ");
-  Serial.println(Output);
+  getRemoteControlParameters();
 
-  // Controler
-  Setpoint = getReference();
-  Input = filtered_angle;
-  myPID.Compute();
+  setMotors();
 
-  // Signal to motors
-  yellow_esc.writeMicroseconds(int(1200 - Output));
-  pink_esc.writeMicroseconds(int((1200 + Output)));
+}
 
-  //yellow_esc.writeMicroseconds(1300);
-  //pink_esc.writeMicroseconds(1300);
+void calculatePid()
+{
+  deltaT = (millis() - initialTime) / 1000.0;
 
+  error = ref - filteredAngle;
+
+  P = kp * error;
+  I += ki * error * deltaT;
+  D = kd * (error - previousError) / deltaT;
+
+  previousError = error;
+
+  pidOutput = P + I + D;
 }
 
 void calibrateEscs()
 {
-  yellow_esc.attach(8);
-  pink_esc.attach(9);
   Serial.println("Calibrating ESCs...");
   delay(1000);
 
   Serial.println("Writting maximum pulse length...");
   Serial.println("Turn on power source, then wait 2 seconds and press any key.");
-  yellow_esc.writeMicroseconds(MAX_PULSE_LENGTH);
-  pink_esc.writeMicroseconds(MAX_PULSE_LENGTH);
+  yellowEsc.writeMicroseconds(MAX_PULSE_LENGTH);
+  pinkEsc.writeMicroseconds(MAX_PULSE_LENGTH);
   while (!Serial.available())
   {
   }
   delay(1000);
 
   Serial.println("Writting minimum pulse length...");
-  yellow_esc.writeMicroseconds(MIN_PULSE_LENGTH);
-  pink_esc.writeMicroseconds(MIN_PULSE_LENGTH);
+  yellowEsc.writeMicroseconds(MIN_PULSE_LENGTH);
+  pinkEsc.writeMicroseconds(MIN_PULSE_LENGTH);
   delay(1000);
   Serial.println("ESCs calibration done.");
   return;
@@ -110,31 +110,54 @@ void calibrateEscs()
 
 void calibrateSensor()
 {
-  Serial.println("Calibrating MPU sensor...");  
-  delay(3000);
+  Serial.println("Calibrating MPU sensor...");
   mpu.calcOffsets(true, true); // Calculate offsets for gyro and acc
-  delay(1000);
+  delay(100);
   Serial.println("MPU calibration done");
 }
 
-float filteredAngle(float angle)
+float getFilteredAngle()
 {
   // This function returns the mean from the previous 5 values of angle measured
   buff[0] = buff[1];
   buff[1] = buff[2];
   buff[2] = buff[3];
   buff[3] = buff[4];
-  buff[4] = angle;
+  buff[4] = measuredAngle;
 
   return (buff[0] + buff[1] + buff[2] + buff[3] + buff[4]) / 5;
 }
 
-float getReference()
+void setMotors()
 {
-  if (Serial.available() > 0)
+  if (automaticState)
   {
-    ref = Serial.parseFloat();
+    calculatePid();
+    yellowEsc.writeMicroseconds(int(1200 - pidOutput));
+    pinkEsc.writeMicroseconds(int((1200 + pidOutput)));
   }
+  else
+  {
+    yellowEsc.writeMicroseconds(m1);
+    pinkEsc.writeMicroseconds(m2);
+  }
+}
 
-  return ref;
+void getRemoteControlParameters()
+{
+  if (Serial1.available())
+  {
+    incomingMessage = Serial1.readString();
+    deserializeJson(doc, incomingMessage);
+    Serial.println(incomingMessage);
+    kp = doc["kp"];
+    kd = doc["kd"];
+    ki = doc["ki"];
+    m1 = doc["m1"];
+    m2 = doc["m2"];
+    ref = doc["reference"];
+    gyr = doc["gyroscope"];
+    disturbanceState = doc["disturbance"];
+    automaticState = doc["automatic"];
+  }
 }
