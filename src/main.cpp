@@ -2,7 +2,6 @@
 #include <MPU6050_light.h>
 #include <Servo.h>
 #include <PID_v1.h>
-#include <ArduinoJson.h>
 
 #define MIN_PULSE_LENGTH 1000 // TODO: entender melhor esses valores
 #define MAX_PULSE_LENGTH 1400
@@ -23,13 +22,14 @@ void calibrateSensor();
 void calibrateEscs();
 
 // input
-float ref = 0, gyr = 0, disturbanceState = 0, automaticState = 0;
-int m1 = MIN_PULSE_LENGTH, m2 = MIN_PULSE_LENGTH;
+float ref = 0, gyr = 0;
+int m1 = MIN_PULSE_LENGTH, m2 = MIN_PULSE_LENGTH, disturbanceState = 0, automaticState = 0;
+int index;
 float measuredAngle;
 void getRemoteControlParameters();
+void printRemoteControlParameters();
 void setMotors();
 String incomingMessage;
-JsonDocument doc;
 
 // PID
 double kp = 1.5, ki = 0.05, kd = 0, P, I, D;
@@ -41,19 +41,18 @@ void setup()
   Serial.begin(9600);
   Serial.println("Starting...");
 
-  Serial1.begin(115200);
-  Serial1.println("Starting...");
+  Serial1.begin(9600);
 
   // MPU 6050 setup
   Wire.begin();
   mpu.begin();
-  calibrateSensor();
+  // calibrateSensor();
   mpu.setFilterGyroCoef(0.98);
 
   // Escs setup
   yellowEsc.attach(8);
   pinkEsc.attach(9);
-  calibrateEscs();
+  // calibrateEscs();
 }
 
 void loop()
@@ -68,7 +67,57 @@ void loop()
   getRemoteControlParameters();
 
   setMotors();
+}
 
+void printRemoteControlParameters()
+{
+  Serial.print("kp: ");
+  Serial.print(kp);
+  Serial.print(" kd: ");
+  Serial.print(kd);
+  Serial.print(" ki: ");
+  Serial.print(ki);
+  Serial.print(" m1: ");
+  Serial.print(m1);
+  Serial.print(" m2: ");
+  Serial.print(m2);
+  Serial.print(" gyr: ");
+  Serial.print(gyr);
+  Serial.print(" ref: ");
+  Serial.print(ref);
+  Serial.print(" automaticState: ");
+  Serial.print(automaticState);
+  Serial.print(" disturbanceState: ");
+  Serial.println(disturbanceState);
+}
+
+void getRemoteControlParameters()
+{
+  if (Serial1.available())
+  {
+    incomingMessage = Serial1.readString();
+
+    index = 0;
+
+    kp = incomingMessage.substring(0, incomingMessage.indexOf(',')).toFloat();
+    index = incomingMessage.indexOf(',') + 1;
+    ki = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toFloat();
+    index = incomingMessage.indexOf(',', index) + 1;
+    kd = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toFloat();
+    index = incomingMessage.indexOf(',', index) + 1;
+    m1 = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toInt();
+    index = incomingMessage.indexOf(',', index) + 1;
+    m2 = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toInt();
+    index = incomingMessage.indexOf(',', index) + 1;
+    gyr = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toFloat();
+    index = incomingMessage.indexOf(',', index) + 1;
+    ref = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toFloat();
+    index = incomingMessage.indexOf(',', index) + 1;
+    automaticState = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toInt();
+    index = incomingMessage.indexOf(',', index) + 1;
+    disturbanceState = incomingMessage.substring(index).toInt();
+    printRemoteControlParameters();
+  }
 }
 
 void calculatePid()
@@ -140,24 +189,5 @@ void setMotors()
   {
     yellowEsc.writeMicroseconds(m1);
     pinkEsc.writeMicroseconds(m2);
-  }
-}
-
-void getRemoteControlParameters()
-{
-  if (Serial1.available())
-  {
-    incomingMessage = Serial1.readString();
-    deserializeJson(doc, incomingMessage);
-    Serial.println(incomingMessage);
-    kp = doc["kp"];
-    kd = doc["kd"];
-    ki = doc["ki"];
-    m1 = doc["m1"];
-    m2 = doc["m2"];
-    ref = doc["reference"];
-    gyr = doc["gyroscope"];
-    disturbanceState = doc["disturbance"];
-    automaticState = doc["automatic"];
   }
 }
