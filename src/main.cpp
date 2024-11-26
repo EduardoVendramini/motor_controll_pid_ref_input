@@ -3,8 +3,8 @@
 #include <Servo.h>
 #include <PID_v1.h>
 
-#define MIN_PULSE_LENGTH 1000 // TODO: entender melhor esses valores
-#define MAX_PULSE_LENGTH 1400
+#define MIN_PULSE_LENGTH 1000 // https://howtomechatronics.com/tutorials/arduino/arduino-brushless-motor-control-tutorial-esc-bldc/
+#define MAX_PULSE_LENGTH 2000
 
 // MPU 6050 sensor
 MPU6050 mpu(Wire);
@@ -22,6 +22,7 @@ void calibrateSensor();
 void calibrateEscs();
 
 // input
+int motorSignal = 0;
 float ref = 0, gyr = 0;
 int m1 = MIN_PULSE_LENGTH, m2 = MIN_PULSE_LENGTH, disturbanceState = 0, automaticState = 0;
 int index;
@@ -41,18 +42,20 @@ void setup()
   Serial.begin(9600);
   Serial.println("Starting...");
 
-  Serial1.begin(9600);
+  Serial1.begin(115200);
+  // Serial1.begin(9600); // From home
 
   // MPU 6050 setup
   Wire.begin();
   mpu.begin();
-  // calibrateSensor();
+  calibrateSensor();
   mpu.setFilterGyroCoef(0.98);
 
   // Escs setup
   yellowEsc.attach(8);
   pinkEsc.attach(9);
-  // calibrateEscs();
+  calibrateEscs();
+  motorSignal = 1000;
 }
 
 void loop()
