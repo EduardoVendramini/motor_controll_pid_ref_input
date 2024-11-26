@@ -41,18 +41,19 @@ void setup()
   Serial.begin(9600);
   Serial.println("Starting...");
 
-  Serial1.begin(9600);
+  Serial1.begin(115200);
+  // Serial1.begin(9600); // From home
 
   // MPU 6050 setup
   Wire.begin();
   mpu.begin();
-  // calibrateSensor();
+  calibrateSensor();
   mpu.setFilterGyroCoef(0.98);
 
   // Escs setup
   yellowEsc.attach(8);
   pinkEsc.attach(9);
-  // calibrateEscs();
+  calibrateEscs(); 
 }
 
 void loop()
@@ -184,10 +185,12 @@ void setMotors()
     calculatePid();
     yellowEsc.writeMicroseconds(int(1200 - pidOutput));
     pinkEsc.writeMicroseconds(int((1200 + pidOutput)));
+
   }
   else
   {
-    yellowEsc.writeMicroseconds(m1);
-    pinkEsc.writeMicroseconds(m2);
+    yellowEsc.writeMicroseconds(1200);
+    pinkEsc.writeMicroseconds(1200);
+    Serial.println("Manual mode");
   }
 }
