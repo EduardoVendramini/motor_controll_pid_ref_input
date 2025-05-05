@@ -22,9 +22,8 @@ void calibrateSensor();
 void calibrateEscs();
 
 // input
-int motorSignal = 0;
 float ref = 0, gyr = 0;
-int m1 = MIN_PULSE_LENGTH, m2 = MIN_PULSE_LENGTH, disturbanceState = 0, automaticState = 0;
+int m1 = MIN_PULSE_LENGTH, m2 = MIN_PULSE_LENGTH, disturbanceState = 0, automaticState = 1;
 int index;
 float measuredAngle;
 void getRemoteControlParameters();
@@ -32,10 +31,12 @@ void printRemoteControlParameters();
 void setMotors();
 String incomingMessage;
 
-// PID
+
 double kp = 1.5, ki = 0.05, kd = 0, P, I, D;
-float initialTime, deltaT, error, previousError, pidOutput;
+float deltaT, error, previousError, pidOutput;
 void calculatePid();
+
+unsigned long initialTime = 0, finalTime = 0;
 
 void setup()
 {
@@ -52,10 +53,10 @@ void setup()
   mpu.setFilterGyroCoef(0.98);
 
   // Escs setup
-  yellowEsc.attach(8);
+  yellowEsc.attach(8); // change to 10 (16 bit timer)
   pinkEsc.attach(9);
   calibrateEscs();
-  motorSignal = 1000;
+  Serial1.setTimeout(0);
 }
 
 void loop()
@@ -69,11 +70,23 @@ void loop()
 
   getRemoteControlParameters();
 
+  // Serial.print(">measuredAngle:");
+  // Serial.println(measuredAngle);
+  printRemoteControlParameters();
+
   setMotors();
+
+  finalTime = millis();
+  if (finalTime - initialTime < 50)
+  {
+    delay(50 - (finalTime - initialTime));
+  }
 }
 
 void printRemoteControlParameters()
 {
+  Serial.print("measuredAngle: ");
+  Serial.print(filteredAngle);
   Serial.print("kp: ");
   Serial.print(kp);
   Serial.print(" kd: ");
@@ -119,7 +132,6 @@ void getRemoteControlParameters()
     automaticState = incomingMessage.substring(index, incomingMessage.indexOf(',', index)).toInt();
     index = incomingMessage.indexOf(',', index) + 1;
     disturbanceState = incomingMessage.substring(index).toInt();
-    printRemoteControlParameters();
   }
 }
 
@@ -185,8 +197,8 @@ void setMotors()
   if (automaticState)
   {
     calculatePid();
-    yellowEsc.writeMicroseconds(int(1200 - pidOutput));
-    pinkEsc.writeMicroseconds(int((1200 + pidOutput)));
+    yellowEsc.writeMicroseconds(int(1300 - pidOutput));
+    pinkEsc.writeMicroseconds(int((1300 + pidOutput)));
   }
   else
   {
