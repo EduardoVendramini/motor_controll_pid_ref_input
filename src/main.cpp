@@ -31,7 +31,7 @@ void printRemoteControlParameters();
 void setMotors();
 String incomingMessage;
 
-// PID
+
 double kp = 1.5, ki = 0.05, kd = 0, P, I, D;
 float deltaT, error, previousError, pidOutput;
 void calculatePid();
@@ -53,7 +53,7 @@ void setup()
   mpu.setFilterGyroCoef(0.98);
 
   // Escs setup
-  yellowEsc.attach(8);
+  yellowEsc.attach(8); // change to 10 (16 bit timer)
   pinkEsc.attach(9);
   calibrateEscs();
   Serial1.setTimeout(0);
